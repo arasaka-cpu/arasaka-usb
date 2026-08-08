@@ -43,6 +43,7 @@ jobs:
 
       - name: Build snap
         run: |
+          printf '%s' "${GITHUB_REF_NAME#v}" > .snap-version
           sudo chown root:root /
           sudo snap install snapcraft --classic
           sudo snap install lxd

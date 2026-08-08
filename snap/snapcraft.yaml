@@ -1,6 +1,7 @@
 name: arasaka-usb
 base: core26
-version: git
+version: '0.0.0'
+adopt-info: arasaka-usb
 summary: Arasaka USB Flasher
 description: |
   Download, verify, and provision the Arasaka Linux image to a USB drive.
@@ -83,6 +84,9 @@ parts:
     plugin: rust
     source: .
     after: [command-chain]
+    override-pull: |
+      craftctl default
+      craftctl set version "$(cat "${CRAFT_PROJECT_DIR}/.snap-version")"
     build-snaps:
       - gnome-core26-sdk
     build-packages:
