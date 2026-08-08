@@ -91,11 +91,10 @@ parts:
       - PATH: /snap/gnome-core26-sdk/current/usr/bin:$PATH
       - LD_LIBRARY_PATH: /snap/gnome-core26-sdk/current/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR:/snap/gnome-core26-sdk/current/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR:/snap/gnome-core26-sdk/current/usr/lib
       - PKG_CONFIG_PATH: /snap/gnome-core26-sdk/current/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/pkgconfig:/snap/gnome-core26-sdk/current/usr/lib/pkgconfig:/snap/gnome-core26-sdk/current/usr/share/pkgconfig
-    organize:
-      icons/arasaka-usb.svg: share/icons/hicolor/scalable/apps/arasaka-usb.svg
-      icons/arasaka-usb.png: share/icons/hicolor/128x128/apps/arasaka-usb.png
-      packaging/org.arasaka.usb.desktop: share/applications/org.arasaka.usb.desktop
-      packaging/org.arasaka.usb.metainfo.xml: share/metainfo/org.arasaka.usb.metainfo.xml
     override-build: |
       cargo build --release --locked
       install -Dm755 target/release/arasaka-usb "$SNAPCRAFT_PART_INSTALL/bin/arasaka-usb"
+      install -Dm644 icons/arasaka-usb.svg "$SNAPCRAFT_PART_INSTALL/share/icons/hicolor/scalable/apps/arasaka-usb.svg"
+      install -Dm644 icons/arasaka-usb.png "$SNAPCRAFT_PART_INSTALL/share/icons/hicolor/128x128/apps/arasaka-usb.png"
+      install -Dm644 packaging/org.arasaka.usb.desktop "$SNAPCRAFT_PART_INSTALL/share/applications/org.arasaka.usb.desktop"
+      install -Dm644 packaging/org.arasaka.usb.metainfo.xml "$SNAPCRAFT_PART_INSTALL/share/metainfo/org.arasaka.usb.metainfo.xml"
