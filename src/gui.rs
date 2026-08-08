@@ -152,7 +152,15 @@ fn build_ui(app: &gtk4::Application) {
         let devs = Arc::clone(&devs_for_refresh);
         let tx = tx_refresh.clone();
         thread::spawn(move || {
-            let list = list_devices().unwrap_or_default();
+            let list = match list_devices() {
+                Ok(l) => l,
+                Err(e) => {
+                    crate::debug!("device scan failed: {e:?}");
+                    let _ = tx.send(UiMsg::Devices(Vec::new()));
+                    let _ = tx.send(UiMsg::Status(format!("Device scan failed: {e}")));
+                    return;
+                }
+            };
             *devs.lock().unwrap() = list.clone();
             let _ = tx.send(UiMsg::Devices(list));
         });
@@ -185,7 +193,15 @@ fn build_ui(app: &gtk4::Application) {
 
     let tx_initial = tx.clone();
     thread::spawn(move || {
-        let list = list_devices().unwrap_or_default();
+        let list = match list_devices() {
+            Ok(l) => l,
+            Err(e) => {
+                crate::debug!("initial device scan failed: {e:?}");
+                let _ = tx_initial.send(UiMsg::Devices(Vec::new()));
+                let _ = tx_initial.send(UiMsg::Status(format!("Device scan failed: {e}")));
+                return;
+            }
+        };
         *devs.lock().unwrap() = list.clone();
         let _ = tx_initial.send(UiMsg::Devices(list));
     });

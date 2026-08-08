@@ -5,6 +5,26 @@ pub mod download;
 pub mod flash;
 pub mod gui;
 
+/// True when ARASAKA_DEBUG is set (non-empty and not "0"). The flatpak
+/// sandbox strips unknown env vars, so run with
+/// `flatpak run --env=ARASAKA_DEBUG=1 org.arasaka.usb`.
+pub fn dbg_enabled() -> bool {
+    std::env::var("ARASAKA_DEBUG").is_ok_and(|v| !v.is_empty() && v != "0")
+}
+
+pub fn dbg(args: std::fmt::Arguments) {
+    if dbg_enabled() {
+        eprintln!("[arasaka] {}", args);
+    }
+}
+
+#[macro_export]
+macro_rules! debug {
+    ($($arg:tt)*) => {
+        $crate::dbg(format_args!($($arg)*))
+    };
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Manifest {
     pub file: String,
