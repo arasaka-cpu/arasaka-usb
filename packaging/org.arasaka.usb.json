@@ -20,12 +20,12 @@
       "name": "arasaka-usb",
       "buildsystem": "simple",
       "build-commands": [
-        "cargo build --release --locked",
-        "install -Dm755 target/release/arasaka-usb /app/bin/arasaka-usb",
-        "install -Dm644 icons/arasaka-usb.svg /app/share/icons/hicolor/scalable/apps/arasaka-usb.svg",
-        "install -Dm644 icons/arasaka-usb.png /app/share/icons/hicolor/128x128/apps/arasaka-usb.png",
-        "install -Dm644 packaging/org.arasaka.usb.desktop /app/share/applications/org.arasaka.usb.desktop",
-        "install -Dm644 packaging/org.arasaka.usb.metainfo.xml /app/share/metainfo/org.arasaka.usb.metainfo.xml"
+        "cd app && cargo build --release --locked",
+        "install -Dm755 app/target/release/arasaka-usb /app/bin/arasaka-usb",
+        "install -Dm644 app/icons/arasaka-usb.svg /app/share/icons/hicolor/scalable/apps/arasaka-usb.svg",
+        "install -Dm644 app/icons/arasaka-usb.png /app/share/icons/hicolor/128x128/apps/arasaka-usb.png",
+        "install -Dm644 app/packaging/org.arasaka.usb.desktop /app/share/applications/org.arasaka.usb.desktop",
+        "install -Dm644 app/packaging/org.arasaka.usb.metainfo.xml /app/share/metainfo/org.arasaka.usb.metainfo.xml"
       ],
       "sources": [
         {

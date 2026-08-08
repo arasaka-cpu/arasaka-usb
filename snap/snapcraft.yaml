@@ -72,7 +72,12 @@ hooks:
 parts:
   command-chain:
     source: snap/command-chain
-    plugin: make
+    plugin: nil
+    override-build: |
+      mkdir -p "$CRAFT_PART_INSTALL/snap/command-chain"
+      install -m755 hooks-configure-fonts "$CRAFT_PART_INSTALL/snap/command-chain/"
+      install -m755 desktop-launch "$CRAFT_PART_INSTALL/snap/command-chain/"
+      install -m755 run "$CRAFT_PART_INSTALL/snap/command-chain/"
 
   arasaka-usb:
     plugin: rust
