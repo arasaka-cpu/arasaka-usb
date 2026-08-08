@@ -19,6 +19,7 @@
     {
       "name": "arasaka-usb",
       "buildsystem": "simple",
+      "build-args": ["--share=network"],
       "build-commands": [
         "cargo build --release --locked",
         "install -Dm755 target/release/arasaka-usb /app/bin/arasaka-usb",

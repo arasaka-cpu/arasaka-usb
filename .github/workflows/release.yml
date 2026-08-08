@@ -29,7 +29,7 @@ jobs:
 
       - name: Build Flatpak bundle
         run: |
-          flatpak-builder --user --force-clean --install-deps-from=flathub --share=network --repo=repo build packaging/org.arasaka.usb.json
+          flatpak-builder --user --force-clean --install-deps-from=flathub --repo=repo build packaging/org.arasaka.usb.json
           flatpak build-bundle repo arasaka-usb.flatpak org.arasaka.usb
 
       - name: Upload artifact
