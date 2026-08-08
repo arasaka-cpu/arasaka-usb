@@ -1,6 +1,6 @@
 name: arasaka-usb
 base: core26
-version: '0.2.0'
+version-script: git describe --tags --always | sed 's/^v//'
 summary: Arasaka USB Flasher
 description: |
   Download, verify, and provision the Arasaka Linux image to a USB drive.
