@@ -5,7 +5,8 @@
   "sdk": "org.gnome.Sdk",
   "sdk-extensions": ["org.freedesktop.Sdk.Extension.rust-stable"],
   "build-options": {
-    "append-path": "/usr/lib/sdk/rust-stable/bin"
+    "append-path": "/usr/lib/sdk/rust-stable/bin",
+    "build-args": ["--share=network"]
   },
   "command": "arasaka-usb",
   "finish-args": [
@@ -19,7 +20,6 @@
     {
       "name": "arasaka-usb",
       "buildsystem": "simple",
-      "build-args": ["--share=network"],
       "build-commands": [
         "cargo build --release --locked",
         "install -Dm755 target/release/arasaka-usb /app/bin/arasaka-usb",
