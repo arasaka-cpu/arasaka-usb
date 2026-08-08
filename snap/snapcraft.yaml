@@ -86,7 +86,7 @@ parts:
     after: [command-chain]
     override-pull: |
       craftctl default
-      craftctl set version "$(cat "${CRAFT_PROJECT_DIR}/.snap-version")"
+      craftctl set version="$(cat "${CRAFT_PROJECT_DIR}/.snap-version")"
     build-snaps:
       - gnome-core26-sdk
     build-packages:
