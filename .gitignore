@@ -1,0 +1,9 @@
+/target
+*.snap
+*.flatpak
+/repo
+/build
+**/*.rs.bk
+*.swp
+.idea/
+.vscode/

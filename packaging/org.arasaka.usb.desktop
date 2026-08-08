@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Arasaka USB Flasher
+GenericName=USB Flasher
+Comment=Download, verify, and provision the Arasaka Linux image to a USB drive
+Exec=arasaka-usb
+Icon=arasaka-usb
+Terminal=false
+Categories=System;
+Keywords=arasaka;linux;usb;flash;iso;
+X-GNOME-UsesNotifications=true

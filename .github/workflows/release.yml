@@ -1,0 +1,120 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  flatpak:
+    name: Build Flatpak
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Flatpak tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak --user install -y flathub org.gnome.Platform//50
+          flatpak --user install -y flathub org.gnome.Sdk//50
+          flatpak --user install -y flathub org.freedesktop.Sdk.Extension.rust-stable//25.08
+
+      - name: Build Flatpak bundle
+        run: |
+          flatpak-builder --user --force-clean --install-deps-from=flathub --repo=repo build packaging/org.arasaka.usb.json
+          flatpak build-bundle repo arasaka-usb.flatpak org.arasaka.usb
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: flatpak
+          path: arasaka-usb.flatpak
+
+  snap:
+    name: Build Snap
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build snap
+        run: |
+          sudo snap install snapcraft --classic
+          sudo snap install lxd
+          sudo usermod --append --groups lxd "$USER"
+          sudo systemctl enable --now snap.lxd.daemon
+          sudo lxd init --auto
+          sg lxd -c "snapcraft"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: snap
+          path: "*.snap"
+
+  windows:
+    name: Build Windows EXE
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-rust
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-gtk4
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-ntldd
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Bundle runtime DLLs
+        run: |
+          mkdir -p dist
+          cp target/release/arasaka-usb.exe dist/
+          ntldd -R target/release/arasaka-usb.exe | awk '/=>/ {split($0, a, "=>"); gsub(/^ +| +$/, "", a[2]); sub(/ \\(.*/, "", a[2]); print a[2]}' | sort -u | while read -r dll; do
+            udll=$(cygpath -u "$dll" 2>/dev/null || printf '%s' "$dll")
+            case "$udll" in
+              /mingw64/*) cp "$udll" dist/ ;;
+            esac
+          done
+          tar -czf arasaka-usb-windows.tar.gz dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows
+          path: arasaka-usb-windows.tar.gz
+
+  release:
+    name: Publish release
+    needs: [flatpak, snap, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |-
+            artifacts/flatpak/arasaka-usb.flatpak
+            artifacts/snap/*.snap
+            artifacts/windows/arasaka-usb-windows.tar.gz

@@ -1,0 +1,96 @@
+name: arasaka-usb
+base: core26
+version: '0.2.0'
+summary: Arasaka USB Flasher
+description: |
+  Download, verify, and provision the Arasaka Linux image to a USB drive.
+  The application retrieves the official image from Arasaka infrastructure,
+  reassembles it, validates its cryptographic signature, and writes it to
+  the selected removable drive.
+grade: stable
+confinement: strict
+
+apps:
+  arasaka-usb:
+    command: bin/arasaka-usb
+    command-chain:
+      - snap/command-chain/desktop-launch
+    plugs:
+      - desktop
+      - desktop-legacy
+      - gsettings
+      - opengl
+      - wayland
+      - x11
+      - network
+      - removable-media
+      - raw-usb
+      - home
+    desktop: share/applications/org.arasaka.usb.desktop
+    environment:
+      SNAP_DESKTOP_RUNTIME: $SNAP/gnome-platform
+      GTK_USE_PORTAL: '1'
+
+plugs:
+  desktop:
+    mount-host-font-cache: false
+  gtk-3-themes:
+    interface: content
+    target: $SNAP/data-dir/themes
+    default-provider: gtk-common-themes
+  icon-themes:
+    interface: content
+    target: $SNAP/data-dir/icons
+    default-provider: gtk-common-themes
+  sound-themes:
+    interface: content
+    target: $SNAP/data-dir/sounds
+    default-provider: gtk-common-themes
+  gnome-core26:
+    interface: content
+    target: $SNAP/gnome-platform
+    default-provider: gnome-core26
+
+layout:
+  /usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/webkit2gtk-4.0:
+    bind: $SNAP/gnome-platform/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/webkit2gtk-4.0
+  /usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/webkit2gtk-4.1:
+    bind: $SNAP/gnome-platform/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/webkit2gtk-4.1
+  /usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libproxy:
+    bind: $SNAP/gnome-platform/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libproxy
+  /usr/share/xml/iso-codes:
+    bind: $SNAP/gnome-platform/usr/share/xml/iso-codes
+  /usr/share/libdrm:
+    bind: $SNAP/gnome-platform/usr/share/libdrm
+
+hooks:
+  configure:
+    plugs: [desktop]
+    command-chain:
+      - snap/command-chain/hooks-configure-fonts
+
+parts:
+  command-chain:
+    source: snap/command-chain
+    plugin: make
+
+  arasaka-usb:
+    plugin: rust
+    source: .
+    after: [command-chain]
+    build-snaps:
+      - gnome-core26-sdk
+    build-packages:
+      - pkg-config
+    build-environment:
+      - PATH: /snap/gnome-core26-sdk/current/usr/bin:$PATH
+      - LD_LIBRARY_PATH: /snap/gnome-core26-sdk/current/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR:/snap/gnome-core26-sdk/current/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR:/snap/gnome-core26-sdk/current/usr/lib
+      - PKG_CONFIG_PATH: /snap/gnome-core26-sdk/current/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/pkgconfig:/snap/gnome-core26-sdk/current/usr/lib/pkgconfig:/snap/gnome-core26-sdk/current/usr/share/pkgconfig
+    organize:
+      icons/arasaka-usb.svg: share/icons/hicolor/scalable/apps/arasaka-usb.svg
+      icons/arasaka-usb.png: share/icons/hicolor/128x128/apps/arasaka-usb.png
+      packaging/org.arasaka.usb.desktop: share/applications/org.arasaka.usb.desktop
+      packaging/org.arasaka.usb.metainfo.xml: share/metainfo/org.arasaka.usb.metainfo.xml
+    override-build: |
+      cargo build --release --locked
+      install -Dm755 target/release/arasaka-usb "$SNAPCRAFT_PART_INSTALL/bin/arasaka-usb"

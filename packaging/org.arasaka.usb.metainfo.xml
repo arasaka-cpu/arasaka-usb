@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.arasaka.usb</id>
+  <name>Arasaka USB Flasher</name>
+  <summary>Download, verify, and provision the Arasaka Linux image to a USB drive</summary>
+  <developer id="org.arasaka">
+    <name>Arasaka Corporation</name>
+  </developer>
+  <description>
+    <p>
+      Arasaka USB Flasher retrieves the official Arasaka Linux image from
+      corporate infrastructure, reassembles it, validates its cryptographic
+      signature, and provisions it to the selected removable drive.
+    </p>
+  </description>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <launchable type="desktop-id">org.arasaka.usb.desktop</launchable>
+  <url type="homepage">https://github.com/arasaka-cpu/arasaka-usb</url>
+  <icon type="stock">arasaka-usb</icon>
+  <categories>
+    <category>System</category>
+  </categories>
+</component>
