@@ -46,12 +46,13 @@ jobs:
 
       - name: Build snap
         run: |
+          sudo chown root:root /
           sudo snap install snapcraft --classic
           sudo snap install lxd
           sudo usermod --append --groups lxd "$USER"
-          sudo systemctl enable --now snap.lxd.daemon
           sudo lxd init --auto
-          sg lxd -c "snapcraft"
+          sudo iptables -P FORWARD ACCEPT
+          sudo -u "$USER" -E snapcraft
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

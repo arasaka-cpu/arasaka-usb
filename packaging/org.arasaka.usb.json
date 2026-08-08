@@ -4,6 +4,9 @@
   "runtime-version": "50",
   "sdk": "org.gnome.Sdk",
   "sdk-extensions": ["org.freedesktop.Sdk.Extension.rust-stable"],
+  "build-options": {
+    "append-path": "/usr/lib/sdk/rust-stable/bin"
+  },
   "command": "arasaka-usb",
   "finish-args": [
     "--share=network",
@@ -17,7 +20,6 @@
       "name": "arasaka-usb",
       "buildsystem": "simple",
       "build-commands": [
-        "source /usr/lib/sdk/rust-stable/environment.sh",
         "cargo build --release --locked",
         "install -Dm755 target/release/arasaka-usb /app/bin/arasaka-usb",
         "install -Dm644 icons/arasaka-usb.svg /app/share/icons/hicolor/scalable/apps/arasaka-usb.svg",
