@@ -30,7 +30,8 @@
       "sources": [
         {
           "type": "dir",
-          "path": "."
+          "path": ".",
+          "dest": "app"
         }
       ]
     }

@@ -87,7 +87,7 @@ jobs:
         run: |
           mkdir -p dist
           cp target/release/arasaka-usb.exe dist/
-          ntldd -R target/release/arasaka-usb.exe | awk '/=>/ {split($0, a, "=>"); gsub(/^ +| +$/, "", a[2]); sub(/ \\(.*/, "", a[2]); print a[2]}' | sort -u | while read -r dll; do
+          ntldd -R target/release/arasaka-usb.exe | awk '/=>/ {split($0, a, "=>"); gsub(/^ +| +$/, "", a[2]); sub(/ [(].*/, "", a[2]); print a[2]}' | sort -u | while read -r dll; do
             udll=$(cygpath -u "$dll" 2>/dev/null || printf '%s' "$dll")
             case "$udll" in
               /mingw64/*) cp "$udll" dist/ ;;
