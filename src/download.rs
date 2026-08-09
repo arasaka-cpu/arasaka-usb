@@ -30,7 +30,14 @@ fn sleep_backoff(attempt: u32) {
 
 /// Download one part to a temp file, with retries on failure. A part is only
 /// appended to the output after it downloads completely, so retries are safe.
-fn download_part_to_file(c: &reqwest::blocking::Client, url: &str, tmp: &Path) -> Result<u64> {
+/// `on_bytes` is called with the number of bytes downloaded so far so callers
+/// can report smooth, per-byte progress instead of per-part jumps.
+fn download_part_to_file(
+    c: &reqwest::blocking::Client,
+    url: &str,
+    tmp: &Path,
+    on_bytes: &mut dyn FnMut(u64),
+) -> Result<u64> {
     for attempt in 1..=PART_MAX_ATTEMPTS {
         let res = match c.get(url).send() {
             Ok(r) => r,
@@ -68,6 +75,7 @@ fn download_part_to_file(c: &reqwest::blocking::Client, url: &str, tmp: &Path) -
                         break;
                     }
                     got += n as u64;
+                    on_bytes(got);
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
                 Err(e) => {
@@ -153,12 +161,15 @@ fn assemble_with_urls_inner(
     let total_parts = manifest.parts.len() as u64;
     for (i, name) in manifest.parts.iter().enumerate() {
         let url = part_url(name);
-        reporter.report(Progress {
-            label: format!("downloading part {} ({}/{})", name, i + 1, total_parts),
-            done: i as u64,
-            total: total_parts,
-        });
-        let got = download_part_to_file(&c, &url, &tmp).with_context(|| format!("part {name}"))?;
+        let part_label = format!("downloading part {} ({}/{})", name, i + 1, total_parts);
+        let got = download_part_to_file(&c, &url, &tmp, &mut |part_bytes| {
+            reporter.report(Progress {
+                label: part_label.clone(),
+                done: out_len + part_bytes,
+                total: manifest.total,
+            });
+        })
+        .with_context(|| format!("part {name}"))?;
         if got == 0 {
             std::fs::remove_file(&tmp).ok();
             return Err(anyhow!("part {name}: empty download"));
