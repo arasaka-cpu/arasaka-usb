@@ -11,8 +11,8 @@
   "command": "arasaka-usb",
   "finish-args": [
     "--share=network",
-    "--socket=x11",
     "--socket=wayland",
+    "--env=GDK_BACKEND=wayland",
     "--socket=session-bus",
     "--system-talk-name=org.freedesktop.UDisks2",
     "--device=all",

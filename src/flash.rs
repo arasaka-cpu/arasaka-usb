@@ -233,8 +233,11 @@ fn udisks_open_write(name: &str) -> Result<Option<File>> {
     Ok(Some(file))
 }
 
-/// Best-effort unmount of every partition of `name` (e.g. sda1, nvme0n1p2)
-/// so the restore is not refused because a filesystem is still mounted.
+/// Best-effort unmount of the device itself and every partition of `name`
+/// (e.g. sdc, sda1, nvme0n1p2) so the restore is not refused because a
+/// filesystem is still mounted. A raw ISO image is often mounted on the whole
+/// disk (`/dev/sdc` itself), not on a partition, so the disk must be checked
+/// too.
 #[cfg(target_os = "linux")]
 fn unmount_partitions(conn: &gio::DBusConnection, name: &str) {
     let reply = conn.call_sync(
@@ -258,7 +261,7 @@ fn unmount_partitions(conn: &gio::DBusConnection, name: &str) {
         let Some(part) = path.rsplit('/').next() else {
             continue;
         };
-        if part == name || !is_partition_of(name, part) {
+        if part != name && !is_partition_of(name, part) {
             continue;
         }
         let object = format!("/org/freedesktop/UDisks2/block_devices/{part}");

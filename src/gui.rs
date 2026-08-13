@@ -71,7 +71,20 @@ impl Reporter for GuiReporter {
     }
 }
 
+/// Force the Wayland backend on Linux so the app never falls back to X11.
+/// Windows has no Wayland and keeps its native backend; the GDK_BACKEND
+/// variable is only set when unset so packagers can still override it.
+#[cfg(target_os = "linux")]
+fn force_wayland() {
+    if std::env::var_os("GDK_BACKEND").is_none() {
+        std::env::set_var("GDK_BACKEND", "wayland");
+    }
+}
+
 pub fn run() -> Result<()> {
+    #[cfg(target_os = "linux")]
+    force_wayland();
+
     let app = gtk4::Application::builder()
         .application_id("org.arasaka.usb")
         .build();

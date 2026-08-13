@@ -22,7 +22,6 @@ apps:
       - gsettings
       - opengl
       - wayland
-      - x11
       - network
       - removable-media
       - raw-usb
@@ -33,6 +32,7 @@ apps:
     environment:
       SNAP_DESKTOP_RUNTIME: $SNAP/gnome-platform
       GTK_USE_PORTAL: '1'
+      GDK_BACKEND: wayland
 
 plugs:
   desktop:
