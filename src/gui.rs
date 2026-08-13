@@ -10,16 +10,41 @@ use crate::download::{assemble, cache_dir, verify_file, Progress, Reporter, TMP_
 use crate::flash::{flash, list_devices, Device};
 use crate::{client, fetch_manifest, Manifest, Source};
 
-/// Follow the OS light/dark preference. GTK 4.8+ exposes the resolved scheme
-/// in `gtk-color-scheme` ("prefer-dark" / "prefer-light" / "default"); we
-/// mirror the explicit values onto `gtk-application-prefer-dark-theme` so the
-/// app adapts on every platform, and let GTK handle the "default" case.
+/// Follow the OS light/dark preference. GTK exposes the resolved scheme on
+/// `GtkSettings`; we mirror the explicit values onto
+/// `gtk-application-prefer-dark-theme` so the app adapts on every platform,
+/// and let GTK handle the "default"/"unsupported" cases. The property was
+/// renamed across GTK versions (a string `gtk-color-scheme` in 4.8-4.18, an
+/// enum `gtk-interface-color-scheme` in 4.20+), so probe which one exists.
 fn sync_system_theme(settings: &gtk4::Settings) {
-    let scheme: gtk4::glib::GString = settings.property("gtk-color-scheme");
-    match scheme.as_str() {
-        "prefer-dark" => settings.set_gtk_application_prefer_dark_theme(true),
-        "prefer-light" => settings.set_gtk_application_prefer_dark_theme(false),
-        _ => {}
+    let dark = if settings.find_property("gtk-interface-color-scheme").is_some() {
+        // The property is a GtkInterfaceColorScheme enum (not plain gint), so
+        // read it as a Value and transform to an int: 2 = prefer-dark,
+        // 3 = prefer-light, anything else leaves GTK in charge.
+        let value: glib::Value = settings.property("gtk-interface-color-scheme");
+        let Ok(value) = value.transform::<i32>() else {
+            return;
+        };
+        let Ok(scheme) = value.get::<i32>() else {
+            return;
+        };
+        match scheme {
+            2 => Some(true),
+            3 => Some(false),
+            _ => None,
+        }
+    } else if settings.find_property("gtk-color-scheme").is_some() {
+        let scheme: glib::GString = settings.property("gtk-color-scheme");
+        match scheme.as_str() {
+            "prefer-dark" => Some(true),
+            "prefer-light" => Some(false),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    if let Some(dark) = dark {
+        settings.set_gtk_application_prefer_dark_theme(dark);
     }
 }
 
@@ -58,9 +83,18 @@ pub fn run() -> Result<()> {
 fn build_ui(app: &gtk4::Application) {
     if let Some(settings) = gtk4::Settings::default() {
         sync_system_theme(&settings);
-        settings.connect_notify_local(Some("gtk-color-scheme"), |settings, _| {
-            sync_system_theme(settings);
-        });
+        let scheme_prop = if settings.find_property("gtk-interface-color-scheme").is_some() {
+            Some("gtk-interface-color-scheme")
+        } else if settings.find_property("gtk-color-scheme").is_some() {
+            Some("gtk-color-scheme")
+        } else {
+            None
+        };
+        if let Some(prop) = scheme_prop {
+            settings.connect_notify_local(Some(prop), |settings, _| {
+                sync_system_theme(settings);
+            });
+        }
     }
     gtk4::Window::set_default_icon_name("arasaka-usb");
     let window = gtk4::ApplicationWindow::builder()
