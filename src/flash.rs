@@ -185,6 +185,7 @@ fn open_for_write(dev: &Device) -> Result<File> {
 /// `Ok(None)` when udisks2 is not reachable so callers can fall back.
 #[cfg(target_os = "linux")]
 fn udisks_open_write(name: &str) -> Result<Option<File>> {
+    use gio::prelude::UnixFDListExtManual;
     use std::os::fd::FromRawFd;
 
     let conn = match gio::bus_get_sync(gio::BusType::System, None::<&gio::Cancellable>) {
@@ -201,7 +202,10 @@ fn udisks_open_write(name: &str) -> Result<Option<File>> {
     unmount_partitions(&conn, name);
 
     let args = glib::Variant::tuple_from_iter([empty_options()]);
-    let reply = conn.call_sync(
+    // The `h` in the reply body is only an index into the message's fd list;
+    // the real fd must be fetched with call_with_unix_fd_list (call_sync
+    // would leave us with that index and nothing to resolve it to).
+    let (reply, fd_list) = conn.call_with_unix_fd_list_sync(
         Some("org.freedesktop.UDisks2"),
         &object,
         "org.freedesktop.UDisks2.Block",
@@ -212,14 +216,20 @@ fn udisks_open_write(name: &str) -> Result<Option<File>> {
         // as needed for the answer.
         gio::DBusCallFlags::ALLOW_INTERACTIVE_AUTHORIZATION,
         -1,
+        None::<&gio::UnixFDList>,
         None::<&gio::Cancellable>,
     )?;
     let (handle,): (glib::variant::Handle,) = reply
         .get()
         .ok_or_else(|| anyhow!("unexpected udisks2 OpenForRestore reply"))?;
-    // SAFETY: udisks2 returned a newly opened fd that we now own; the device
-    // is released when the fd is closed (modern udisks2 has no Close method).
-    let file = unsafe { File::from_raw_fd(handle.0) };
+    let fd_list = fd_list.ok_or_else(|| anyhow!("udisks2 returned no file descriptor"))?;
+    let fd = fd_list
+        .get(handle.0)
+        .map_err(|_| anyhow!("udisks2 file descriptor missing from reply"))?;
+    // SAFETY: g_unix_fd_list_get returns a copy of the fd that we own; the
+    // device is released when the fd is closed (modern udisks2 has no Close
+    // method).
+    let file = unsafe { File::from_raw_fd(fd) };
     Ok(Some(file))
 }
 
