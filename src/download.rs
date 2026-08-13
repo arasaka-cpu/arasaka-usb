@@ -36,6 +36,29 @@ pub fn workspace_dir(needed: u64) -> PathBuf {
     std::env::temp_dir()
 }
 
+/// Pick a directory that persists across app runs and can hold `needed`
+/// bytes. Prefers the user cache dir (which under Flatpak maps to the real
+/// disk), so a verified image can be reused on the next launch instead of
+/// being re-downloaded every time.
+pub fn cache_dir(needed: u64) -> PathBuf {
+    let mut cands = Vec::new();
+    if let Some(x) = std::env::var_os("XDG_CACHE_HOME") {
+        cands.push(PathBuf::from(x));
+    }
+    if let Some(h) = std::env::var_os("HOME") {
+        cands.push(PathBuf::from(h).join(".cache"));
+    }
+    cands.push(std::env::temp_dir());
+    for d in &cands {
+        // Create it first: statvfs fails on a missing path and would wrongly
+        // disqualify an otherwise usable cache dir.
+        if std::fs::create_dir_all(d).is_ok() && free_bytes(d) >= needed {
+            return d.clone();
+        }
+    }
+    std::env::temp_dir()
+}
+
 fn free_bytes(dir: &Path) -> u64 {
     #[cfg(unix)]
     {

@@ -2,13 +2,26 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use gtk4::glib;
 use gtk4::prelude::*;
 
-use crate::download::{assemble, workspace_dir, Progress, Reporter, TMP_WORKSPACE_MARGIN};
+use crate::download::{assemble, cache_dir, verify_file, Progress, Reporter, TMP_WORKSPACE_MARGIN};
 use crate::flash::{flash, list_devices, Device};
 use crate::{client, fetch_manifest, Manifest, Source};
+
+/// Follow the OS light/dark preference. GTK 4.8+ exposes the resolved scheme
+/// in `gtk-color-scheme` ("prefer-dark" / "prefer-light" / "default"); we
+/// mirror the explicit values onto `gtk-application-prefer-dark-theme` so the
+/// app adapts on every platform, and let GTK handle the "default" case.
+fn sync_system_theme(settings: &gtk4::Settings) {
+    let scheme: gtk4::glib::GString = settings.property("gtk-color-scheme");
+    match scheme.as_str() {
+        "prefer-dark" => settings.set_gtk_application_prefer_dark_theme(true),
+        "prefer-light" => settings.set_gtk_application_prefer_dark_theme(false),
+        _ => {}
+    }
+}
 
 enum UiMsg {
     Devices(Vec<Device>),
@@ -43,6 +56,12 @@ pub fn run() -> Result<()> {
 }
 
 fn build_ui(app: &gtk4::Application) {
+    if let Some(settings) = gtk4::Settings::default() {
+        sync_system_theme(&settings);
+        settings.connect_notify_local(Some("gtk-color-scheme"), |settings, _| {
+            sync_system_theme(settings);
+        });
+    }
     gtk4::Window::set_default_icon_name("arasaka-usb");
     let window = gtk4::ApplicationWindow::builder()
         .application(app)
@@ -268,19 +287,36 @@ fn run_flash(tx: &mpsc::Sender<UiMsg>, dev: &Device) -> Result<()> {
         m.parts.len()
     )));
 
-    let tmp = workspace_dir(m.total + TMP_WORKSPACE_MARGIN).join(&m.file);
-    let reporter = GuiReporter(tx.clone());
-    let _ = tx.send(UiMsg::Progress(0.0));
-    let digest = assemble(&src, &m, &tmp, Box::new(reporter))?;
+    // Keep the verified image on disk so a later launch reuses it instead of
+    // re-downloading. The manifest is always fetched first; if the cached
+    // file no longer matches (newer build, new sha/size), it is replaced.
+    let cache_dir = cache_dir(m.total + TMP_WORKSPACE_MARGIN);
+    let image = cache_dir.join(&m.file);
+    let digest = match verify_file(&image, &m) {
+        Ok(d) => {
+            let _ = tx.send(UiMsg::Status(format!(
+                "Using cached image {} (already verified)",
+                m.file
+            )));
+            d
+        }
+        Err(_) => {
+            let partial = cache_dir.join(format!("{}.partial", m.file));
+            let reporter = GuiReporter(tx.clone());
+            let _ = tx.send(UiMsg::Progress(0.0));
+            let d = assemble(&src, &m, &partial, Box::new(reporter))?;
+            std::fs::rename(&partial, &image).context("move verified image into cache")?;
+            d
+        }
+    };
     let _ = tx.send(UiMsg::Status(format!("sha256 verified: {}", digest)));
     let _ = tx.send(UiMsg::Progress(0.0));
 
     let dev = dev.clone();
-    flash(&dev, &tmp, |written| {
+    flash(&dev, &image, |written| {
         let frac = written as f64 / m.total as f64;
         let _ = tx.send(UiMsg::Progress(frac));
         let _ = tx.send(UiMsg::Status(format!("Flashing… {:.1}%", frac * 100.0)));
     })?;
-    std::fs::remove_file(&tmp).ok();
     Ok(())
 }

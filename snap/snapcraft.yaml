@@ -27,6 +27,8 @@ apps:
       - removable-media
       - raw-usb
       - home
+      - udisks2
+      - polkitd
     desktop: share/applications/org.arasaka.usb.desktop
     environment:
       SNAP_DESKTOP_RUNTIME: $SNAP/gnome-platform
@@ -35,6 +37,14 @@ apps:
 plugs:
   desktop:
     mount-host-font-cache: false
+  udisks2:
+    interface: dbus
+    bus: system
+    name: org.freedesktop.UDisks2
+  polkitd:
+    interface: dbus
+    bus: system
+    name: org.freedesktop.PolicyKit1
   gtk-3-themes:
     interface: content
     target: $SNAP/data-dir/themes

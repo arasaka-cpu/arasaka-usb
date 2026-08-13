@@ -13,6 +13,8 @@
     "--share=network",
     "--socket=x11",
     "--socket=wayland",
+    "--socket=session-bus",
+    "--system-talk-name=org.freedesktop.UDisks2",
     "--device=all",
     "--filesystem=host"
   ],

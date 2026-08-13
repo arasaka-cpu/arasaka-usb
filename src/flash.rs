@@ -2,7 +2,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 
 #[derive(Debug, Clone)]
 pub struct Device {
@@ -143,23 +143,137 @@ pub fn flash(dev: &Device, image: &Path, mut progress_cb: impl FnMut(u64)) -> Re
 #[cfg(target_os = "linux")]
 fn flash_linux(dev: &Device, image: &Path, progress: &mut dyn FnMut(u64)) -> Result<()> {
     let mut src = File::open(image).with_context(|| format!("open {}", image.display()))?;
-    let mut dst = open_write(&dev.path)?;
-    let buf = vec![0u8; 1024 * 1024];
+    let mut dst = open_for_write(dev)?;
     let mut chunk = std::io::BufReader::new(&mut src);
+    let mut buf = vec![0u8; 1024 * 1024];
     let mut written: u64 = 0;
-    let mut buf2 = vec![0u8; 1024 * 1024];
     loop {
-        let n = chunk.read(&mut buf2).context("read image")?;
+        let n = chunk.read(&mut buf).context("read image")?;
         if n == 0 {
             break;
         }
-        dst.write_all(&buf2[..n]).context("write device")?;
+        dst.write_all(&buf[..n]).context("write device")?;
         written += n as u64;
         progress(written);
     }
     dst.sync_all().context("sync device")?;
-    let _ = buf;
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn empty_options() -> glib::Variant {
+    let d = glib::VariantDict::new(None);
+    d.end()
+}
+
+/// Open the device for raw writing. Prefers udisks2 (which triggers a polkit
+/// authorization prompt, so no root shell is needed) and falls back to a
+/// direct device open when udisks2 is not running.
+#[cfg(target_os = "linux")]
+fn open_for_write(dev: &Device) -> Result<File> {
+    match udisks_open_write(&dev.name) {
+        Ok(Some(f)) => return Ok(f),
+        Ok(None) => crate::debug!("udisks2 not available; opening {} directly", dev.path),
+        Err(e) => crate::debug!("udisks2 open failed ({e}); opening {} directly", dev.path),
+    }
+    open_write(&dev.path)
+}
+
+/// Ask udisks2 (org.freedesktop.UDisks2 on the system bus) for a writable fd
+/// to the whole disk via `OpenForRestore`. This performs a polkit
+/// authorization check, so the user gets the normal elevation prompt. Returns
+/// `Ok(None)` when udisks2 is not reachable so callers can fall back.
+#[cfg(target_os = "linux")]
+fn udisks_open_write(name: &str) -> Result<Option<File>> {
+    use std::os::fd::FromRawFd;
+
+    let conn = match gio::bus_get_sync(gio::BusType::System, None::<&gio::Cancellable>) {
+        Ok(c) => c,
+        Err(e) => {
+            crate::debug!("no system bus: {e}");
+            return Ok(None);
+        }
+    };
+    let object = format!("/org/freedesktop/UDisks2/block_devices/{name}");
+
+    // Release any mounted partitions so the whole-disk restore is not refused
+    // because a filesystem is busy.
+    unmount_partitions(&conn, name);
+
+    let args = glib::Variant::tuple_from_iter([empty_options()]);
+    let reply = conn.call_sync(
+        Some("org.freedesktop.UDisks2"),
+        &object,
+        "org.freedesktop.UDisks2.Block",
+        "OpenForRestore",
+        Some(&args),
+        None,
+        // Allow polkit to prompt the user for authorization and wait as long
+        // as needed for the answer.
+        gio::DBusCallFlags::ALLOW_INTERACTIVE_AUTHORIZATION,
+        -1,
+        None::<&gio::Cancellable>,
+    )?;
+    let (handle,): (glib::variant::Handle,) = reply
+        .get()
+        .ok_or_else(|| anyhow!("unexpected udisks2 OpenForRestore reply"))?;
+    // SAFETY: udisks2 returned a newly opened fd that we now own; the device
+    // is released when the fd is closed (modern udisks2 has no Close method).
+    let file = unsafe { File::from_raw_fd(handle.0) };
+    Ok(Some(file))
+}
+
+/// Best-effort unmount of every partition of `name` (e.g. sda1, nvme0n1p2)
+/// so the restore is not refused because a filesystem is still mounted.
+#[cfg(target_os = "linux")]
+fn unmount_partitions(conn: &gio::DBusConnection, name: &str) {
+    let reply = conn.call_sync(
+        Some("org.freedesktop.UDisks2"),
+        "/org/freedesktop/UDisks2",
+        "org.freedesktop.DBus.ObjectManager",
+        "GetManagedObjects",
+        None,
+        None,
+        gio::DBusCallFlags::NONE,
+        -1,
+        None::<&gio::Cancellable>,
+    );
+    let Ok(reply) = reply else { return };
+    let objects = reply.child_value(0);
+    for entry in objects.iter() {
+        let Some(path) = entry.child_value(0).get::<glib::variant::ObjectPath>() else {
+            continue;
+        };
+        let path = path.as_str();
+        let Some(part) = path.rsplit('/').next() else {
+            continue;
+        };
+        if part == name || !is_partition_of(name, part) {
+            continue;
+        }
+        let object = format!("/org/freedesktop/UDisks2/block_devices/{part}");
+        let args = glib::Variant::tuple_from_iter([empty_options()]);
+        let _ = conn.call_sync(
+            Some("org.freedesktop.UDisks2"),
+            &object,
+            "org.freedesktop.UDisks2.Filesystem",
+            "Unmount",
+            Some(&args),
+            None,
+            gio::DBusCallFlags::NONE,
+            -1,
+            None::<&gio::Cancellable>,
+        );
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn is_partition_of(disk: &str, part: &str) -> bool {
+    let Some(rest) = part.strip_prefix(disk) else {
+        return false;
+    };
+    let digits = rest.strip_prefix('p').unwrap_or(rest);
+    !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())
 }
 
 #[cfg(target_os = "windows")]
