@@ -17,7 +17,10 @@ use crate::{client, fetch_manifest, Manifest, Source};
 /// renamed across GTK versions (a string `gtk-color-scheme` in 4.8-4.18, an
 /// enum `gtk-interface-color-scheme` in 4.20+), so probe which one exists.
 fn sync_system_theme(settings: &gtk4::Settings) {
-    let dark = if settings.find_property("gtk-interface-color-scheme").is_some() {
+    let dark = if settings
+        .find_property("gtk-interface-color-scheme")
+        .is_some()
+    {
         // The property is a GtkInterfaceColorScheme enum (not plain gint), so
         // read it as a Value and transform to an int: 2 = prefer-dark,
         // 3 = prefer-light, anything else leaves GTK in charge.
@@ -96,7 +99,10 @@ pub fn run() -> Result<()> {
 fn build_ui(app: &gtk4::Application) {
     if let Some(settings) = gtk4::Settings::default() {
         sync_system_theme(&settings);
-        let scheme_prop = if settings.find_property("gtk-interface-color-scheme").is_some() {
+        let scheme_prop = if settings
+            .find_property("gtk-interface-color-scheme")
+            .is_some()
+        {
             Some("gtk-interface-color-scheme")
         } else if settings.find_property("gtk-color-scheme").is_some() {
             Some("gtk-color-scheme")

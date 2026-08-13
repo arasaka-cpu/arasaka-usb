@@ -83,7 +83,12 @@ fn free_bytes(dir: &Path) -> u64 {
             .collect();
         let mut avail: u64 = 0;
         if unsafe {
-            GetDiskFreeSpaceExW(wide.as_ptr(), &mut avail, std::ptr::null_mut(), std::ptr::null_mut())
+            GetDiskFreeSpaceExW(
+                wide.as_ptr(),
+                &mut avail,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
         } != 0
         {
             return avail;
