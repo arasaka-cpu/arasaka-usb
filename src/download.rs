@@ -1,6 +1,6 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
 use sha2::{Digest, Sha256};
@@ -8,6 +8,66 @@ use sha2::{Digest, Sha256};
 use crate::{client, part_download_url, Manifest, Source};
 
 pub const PART_MAX_ATTEMPTS: u32 = 5;
+
+/// Extra scratch space beyond the assembled image needed while reassembling:
+/// one in-flight part is kept in a temp file before it is appended.
+pub const TMP_WORKSPACE_MARGIN: u64 = 1024 * 1024 * 1024;
+
+/// Pick a directory with at least `needed` free bytes for scratch files.
+/// Prefers the standard temp dir, falling back to the user's cache dir.
+/// Under Flatpak the sandbox `/tmp` is a small tmpfs (a few GiB) that cannot
+/// hold a multi-gigabyte image, while the cache dir lives on the real disk.
+pub fn workspace_dir(needed: u64) -> PathBuf {
+    let mut cands = vec![std::env::temp_dir()];
+    if let Some(x) = std::env::var_os("XDG_CACHE_HOME") {
+        cands.push(PathBuf::from(x));
+    } else if let Some(h) = std::env::var_os("HOME") {
+        cands.push(PathBuf::from(h).join(".cache"));
+    }
+    if let Some(h) = std::env::var_os("HOME") {
+        cands.push(PathBuf::from(h));
+    }
+    for d in &cands {
+        if free_bytes(d) >= needed {
+            let _ = std::fs::create_dir_all(d);
+            return d.clone();
+        }
+    }
+    std::env::temp_dir()
+}
+
+fn free_bytes(dir: &Path) -> u64 {
+    #[cfg(unix)]
+    {
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt;
+        let Ok(c) = CString::new(dir.as_os_str().as_bytes()) else {
+            return 0;
+        };
+        let mut st: libc::statvfs = unsafe { std::mem::zeroed() };
+        if unsafe { libc::statvfs(c.as_ptr(), &mut st) } == 0 {
+            return st.f_bavail.saturating_mul(st.f_frsize);
+        }
+        0
+    }
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+        let wide: Vec<u16> = dir
+            .to_string_lossy()
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let mut avail: u64 = 0;
+        if unsafe {
+            GetDiskFreeSpaceExW(wide.as_ptr(), &mut avail, std::ptr::null_mut(), std::ptr::null_mut())
+        } != 0
+        {
+            return avail;
+        }
+        0
+    }
+}
 
 pub struct Progress {
     pub label: String,
@@ -149,7 +209,7 @@ fn assemble_with_urls_inner(
     let mut hasher = Sha256::new();
     let mut out_len: u64 = 0;
 
-    let tmp = std::env::temp_dir().join(format!(
+    let tmp = workspace_dir(manifest.total + TMP_WORKSPACE_MARGIN).join(format!(
         "arasaka-part-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()

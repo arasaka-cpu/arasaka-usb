@@ -17,6 +17,7 @@ dependencies = [
  "glib",
  "gtk4",
  "hex",
+ "libc",
  "reqwest",
  "serde",
  "serde_json",

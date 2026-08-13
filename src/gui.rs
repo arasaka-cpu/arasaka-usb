@@ -6,7 +6,7 @@ use anyhow::Result;
 use gtk4::glib;
 use gtk4::prelude::*;
 
-use crate::download::{assemble, Progress, Reporter};
+use crate::download::{assemble, workspace_dir, Progress, Reporter, TMP_WORKSPACE_MARGIN};
 use crate::flash::{flash, list_devices, Device};
 use crate::{client, fetch_manifest, Manifest, Source};
 
@@ -268,7 +268,7 @@ fn run_flash(tx: &mpsc::Sender<UiMsg>, dev: &Device) -> Result<()> {
         m.parts.len()
     )));
 
-    let tmp = std::env::temp_dir().join(&m.file);
+    let tmp = workspace_dir(m.total + TMP_WORKSPACE_MARGIN).join(&m.file);
     let reporter = GuiReporter(tx.clone());
     let _ = tx.send(UiMsg::Progress(0.0));
     let digest = assemble(&src, &m, &tmp, Box::new(reporter))?;
